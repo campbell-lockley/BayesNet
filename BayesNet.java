@@ -81,9 +81,8 @@ public class BayesNet {
 	 * Calculates the probability that Bot B will bluff based on whether it is
 	 * cocky or not.
 	 * 
-	 * @param bluffInstances
-	 *            A set of training examples in the form { cocky, bluff } from
-	 *            which to compute the probabilities.
+	 * @param bluffInstances A set of training examples in the form { cocky, bluff } from
+	 * 		which to compute the probabilities.
 	 * @return The probability that Bot B will bluff when it is { cocky, !cocky }.
 	 */
 	public double[] calculateBBluffProbabilities(boolean[][] bluffInstances) {
@@ -111,18 +110,26 @@ public class BayesNet {
 	 * This method calculates the exact probability of a given event occurring,
 	 * where all variables are assigned a given evidence value.
 	 *
-	 * @param evidenceValues
-	 *            The values of all nodes.
+	 * @param evidenceValues The values of all nodes.
 	 * @return -1 if the evidence does not cover every node in the network.
 	 *         Otherwise a probability between 0 and 1.
 	 */
 	public double calculateExactEventProbability(boolean[] evidenceValues) {
-		// Only performs exact calculation for all evidence known.
-		if (evidenceValues.length != nodes.length)
-			return -1;
+		/* Only performs exact calculation for all evidence known. */
+		if (evidenceValues.length != nodes.length) return -1;
 
-		// YOUR CODE HERE
-		return -1;
+		double prob = 1, nodeProb;
+
+		/* Update bayesian network with current evidence */
+		for (int i = 0; i < evidenceValues.length; i++) nodes[i].value = evidenceValues[i];
+
+		/* P(x1, ..., xn) = P(x1|PARENTS(x1)) x ... x P(xn|PARENTS(xn)) */
+		for (int i = 0; i < evidenceValues.length; i++) {
+			nodeProb = nodes[i].conditionalProbability();
+			prob *= (evidenceValues[i]) ? nodeProb : (1 - nodeProb);
+		}
+
+		return prob;
 	}
 
 	/**
@@ -245,7 +252,7 @@ public class BayesNet {
 				true, true, true, false, false, true, false });
 		System.out.println("The probability of Bot B winning on a cocky bluff "
 						+ "(with bet) and both bots have bad hands (A dealt) is: "
-						+ bluffWinProb);
+						+ String.format("%.6f",bluffWinProb));
 
 		// Sample five states from joint distribution and print them
 		for (int i = 0; i < 5; i++) {
