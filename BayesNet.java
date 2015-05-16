@@ -45,6 +45,9 @@ public class BayesNet {
 	/* The list of nodes in the Bayes net */
 	private Node[] nodes;
 
+	/* Random number generator for approximate inference */
+	java.util.Random rand;
+
 	/* A collection of examples describing whether Bot B is { cocky, bluffing } */
 	public static final boolean[][] BBLUFF_EXAMPLES = { { true,  true  },
 			{ true,  true  }, { true,  true  }, { true,  false },
@@ -54,6 +57,7 @@ public class BayesNet {
 
 	/** Constructor that sets up the Poker-game network. */
 	public BayesNet() {
+		rand = new java.util.Random(System.currentTimeMillis());
 		nodes = new Node[7];
 		nodes[0] = new Node("B.Cocky", new Node[] {}, new double[] { 0.05 });
 		nodes[1] = new Node("B.Bluff", new Node[] { nodes[0] },
@@ -69,12 +73,12 @@ public class BayesNet {
 
 	/** Prints the current state of the network to standard out. */
 	public void printState() {
-		for (int i = 0; i < nodes.length; i++) {
+		/*for (int i = 0; i < nodes.length; i++) {
 			if (i > 0) System.out.print(", ");
 			System.out.print(nodes[i].name + " = " + nodes[i].value);
-		}
+		}*/
+		for (int i = 0; i < nodes.length; i++) System.out.print(nodes[i].value + "\t");
 		System.out.println();
-		System.out.flush();
 	}
 
 	/**
@@ -123,7 +127,7 @@ public class BayesNet {
 		/* Update bayesian network with current evidence */
 		for (int i = 0; i < evidenceValues.length; i++) nodes[i].value = evidenceValues[i];
 
-		/* P(x1, ..., xn) = P(x1|PARENTS(x1)) x ... x P(xn|PARENTS(xn)) */
+		/* P(x1, ..., xn) = P(x1|PARENTS(x1)) * ... * P(xn|PARENTS(xn)) */
 		for (int i = 0; i < evidenceValues.length; i++) {
 			nodeProb = nodes[i].conditionalProbability();
 			prob *= (evidenceValues[i]) ? nodeProb : (1 - nodeProb);
@@ -138,8 +142,11 @@ public class BayesNet {
 	 * book/slides).
 	 */
 	public void priorSample() {
-
-		// YOUR CODE HERE
+		/* Order of nodes in nodes[] is parents of dependancies first, so priorSample() can simply iterate 
+		   through node list to find correct contidional probabilities */
+		for (int i = 0; i < nodes.length; i++) {
+			nodes[i].value = (rand.nextDouble() < nodes[i].conditionalProbability()) ? true : false;
+		}
 	}
 
 	/**
@@ -255,9 +262,16 @@ public class BayesNet {
 						+ String.format("%.6f",bluffWinProb));
 
 		// Sample five states from joint distribution and print them
+		String s;
+		for (int j = 0; j < b.nodes.length; j++) {
+			s = (b.nodes[j].name.length() < 8) ? b.nodes[j].name : b.nodes[j].name.substring(0, 7);
+			System.out.print(s + "\t");
+		}
+		System.out.println();
 		for (int i = 0; i < 5; i++) {
 			b.priorSample();
 			b.printState();
+			System.out.flush();
 		}
 
 		// Print out results of some example queries based on rejection
