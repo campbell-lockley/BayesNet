@@ -28,8 +28,8 @@ public class BayesNet {
 		}
 
 		/**
-		 * Returns conditional probability of value "true" for the current node
-		 * based on the values of the parent nodes.
+		 * Returns conditional probability of value "true" for the current node based on the values of the 
+		 * parent nodes.
 		 * 
 		 * @return The conditional probability of this node, given its parents.
 		 */
@@ -96,15 +96,15 @@ public class BayesNet {
 
 		/* Calculate conditional probability table for B.Bluff using trainging data in BBLUFF_EXAMPLES */
 		for (int i = 0; i < bluffInstances.length; i++) {
-			if (bluffInstances[i][COCKY]) numCocky++;			// Find P(Cocky)
+			if (bluffInstances[i][COCKY] == true) numCocky++;			// Find P(Cocky)
 
-			if (bluffInstances[i][BLUFF]) {
-				if (bluffInstances[i][COCKY]) probabilities[0]++;	// Find P(Bluff^Cocky)
-				else probabilities[1]++;				// Find P(Bluff^~Cocky)
+			if (bluffInstances[i][BLUFF] == true) {
+				if (bluffInstances[i][COCKY] == true) probabilities[0]++;	// Find P(Bluff^Cocky)
+				else probabilities[1]++;					// Find P(Bluff^~Cocky)
 			}
 		}
-		probabilities[0] = probabilities[0] / numCocky;				// Calc. P(Bluff|Cocky)
-		probabilities[1] = probabilities[1] / (total - numCocky);		// Calc. P(Bluff|~Cocky)
+		probabilities[0] = probabilities[0] / numCocky;					// Calc. P(Bluff|Cocky)
+		probabilities[1] = probabilities[1] / (total - numCocky);			// Calc. P(Bluff|~Cocky)
 
 		return probabilities;
 	}
@@ -121,15 +121,15 @@ public class BayesNet {
 		/* Only performs exact calculation for all evidence known. */
 		if (evidenceValues.length != nodes.length) return -1;
 
-		double prob = 1, nodeProb;
+		double prob = 1, p;
 
 		/* Update bayesian network with current evidence */
 		for (int i = 0; i < evidenceValues.length; i++) nodes[i].value = evidenceValues[i];
 
 		/* P(x1, ..., xn) = P(x1|PARENTS(x1)) * ... * P(xn|PARENTS(xn)) */
 		for (int i = 0; i < evidenceValues.length; i++) {
-			nodeProb = nodes[i].conditionalProbability();
-			prob *= (evidenceValues[i]) ? nodeProb : (1 - nodeProb);
+			p = nodes[i].conditionalProbability();
+			prob *= (evidenceValues[i] == true) ? p : (1 - p);
 		}
 
 		return prob;
@@ -149,10 +149,11 @@ public class BayesNet {
 
 	/**
 	 * Checks if the current model of the bayesian network (i.e. the current values of the nodes in nodes[]) is 
-	 * consistent with the specified evidence nodes - i.e. nodes[eNodes[x]].value == eValues[x].
+	 * consistent with the specified evidence - i.e. if nodes[eNodes[x]].value == eValues[x] for all x = index in 
+	 * nodes[].
 	 * 
-	 * @param eNodes The indicies of the evidence nodes in the nodes[]
-	 * @param eValues The value of the evidence nodes, in the order specified by eNodes
+	 * @param eNodes The indicies of the evidence nodes in nodes[].
+	 * @param eValues The value of the evidence nodes, in the order specified by eNodes.
 	 * @return True if the current model of the bayesian network is consistent with the evidence, false otherwise.
 	 */
 	private boolean consistent(int[] eNodes, boolean[] eValues) {
@@ -189,12 +190,33 @@ public class BayesNet {
 			priorSample();
 			if (consistent(indicesOfEvidenceNodes, evidenceValues)) {
 				numConsistent++;
-				if (nodes[queryNode].value) count++;
+				if (nodes[queryNode].value == true) count++;
 			}
 		}
 
-		/* Return normalised true value */
+		/* Return the normalised true value */
 		return count / (double)numConsistent;
+	}
+
+	/**
+	 * Checks whether node nodes[nodeIndex] is an evidence node and, if it is, sets the node to the observed value.
+	 * 
+	 * @param nodeIndex The index in nodes[] of the node to check.
+	 * @param eNodes The indicies of the evidence nodes in nodes[].
+	 * @param eValues The value of the evidence nodes, in the order specified by eNodes.
+	 * @return True if this node is an evidence node, false otherwise.
+	 */
+	private boolean inEvidence(int nodeIndex, int[] eNodes, boolean[] eValues) {
+		for (int i = 0; i < eNodes.length; i++) {
+			assert (eNodes[i] < nodes.length);
+
+			if (eNodes[i] == nodeIndex) {
+				nodes[nodeIndex].value = eValues[i];
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -208,8 +230,21 @@ public class BayesNet {
 	 * @return The weight of the event occurring.
 	 */
 	public double weightedSample(int[] indicesOfEvidenceNodes, boolean[] evidenceValues) {
+		double w = 1, p;
 
-		return 0; // REPLACE THIS LINE BY YOUR CODE
+		/* Sample non-evidence nodes and return a weight based on the evidence nodes */
+		for (int i = 0; i < nodes.length; i++) {
+			if (inEvidence(i, indicesOfEvidenceNodes, evidenceValues)) {
+				/* If nodes[i] is an evidence node compute weight */
+				p = nodes[i].conditionalProbability();
+				w *= (nodes[i].value == true) ? p : (1 - p);
+			} else {
+				/* If nodes[i] not an evidence node assign a random sample */
+				nodes[i].value = (rand.nextDouble() < nodes[i].conditionalProbability()) ? true : false;
+			}
+		}
+
+		return w;
 	}
 
 	/**
@@ -228,7 +263,21 @@ public class BayesNet {
 	 */
 	public double likelihoodWeighting(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, 
 			int N) {
-		return 0;
+		assert (indicesOfEvidenceNodes.length == evidenceValues.length);
+
+		final int TRUE = 0, FALSE = 1;
+		double w, weight[] = new double[2];
+
+		/* Take N weighted samples, keeping a vector of sums of the weights based on the query node being true 
+		   or false */
+		for (int i = 0; i < N; i++) {
+			w = weightedSample(indicesOfEvidenceNodes, evidenceValues);
+			if (nodes[queryNode].value == true) weight[TRUE] += w;
+			else weight[FALSE] += w;
+		}
+
+		/* Return the normalised true value */
+		return weight[TRUE] / (weight[TRUE] + weight[FALSE]);
 	}
 
 	/**
@@ -280,8 +329,7 @@ public class BayesNet {
 			b.printState();
 		}
 
-		// Print out results of some example queries based on rejection
-		// sampling.
+		// Print out results of some example queries based on rejection sampling.
 		// Same should be possible with likelihood weighting and MCMC inference.
 		System.out.println();
 		System.out.println("Rejection Sampling:");
@@ -299,6 +347,26 @@ public class BayesNet {
 		s = String.format("%.4f", b.rejectionSampling(4, new int[] { 1, 2 }, 
 					new boolean[] { true, true }, 10000));
 		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
+
+		
+		// Print out results of some example queries based on rejection sampling.
+		System.out.println();
+		System.out.println("Likelihood Weighting:");
+
+		// Probability of B.GoodHand given bet and A not win.
+		s = String.format("%.4f", b.likelihoodWeighting(4, new int[] { 5, 6 }, 
+					new boolean[] { true, false }, 10000));
+		System.out.println("Probability of B.GoodHand given bet and A not win:\t" + s);
+
+		// Probability of betting given a cocky
+		s = String.format("%.4f", b.likelihoodWeighting(1, new int[] { 0 }, new boolean[] { true }, 10000));
+		System.out.println("Probability of betting given a cocky:\t\t\t" + s);
+
+		// Probability of B.Goodhand given B.Bluff and A.Deal
+		s = String.format("%.4f", b.likelihoodWeighting(4, new int[] { 1, 2 }, 
+					new boolean[] { true, true }, 10000));
+		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
+
 	}
 }
 
