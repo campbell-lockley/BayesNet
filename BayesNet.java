@@ -45,8 +45,8 @@ public class BayesNet {
 	/* The list of nodes in the Bayes net */
 	private Node[] nodes;
 
-	/* Random number generator for approximate inference */
-	java.util.Random rand;
+	/* Random number generator for approximate inference methods */
+	private java.util.Random rand;
 
 	/* A collection of examples describing whether Bot B is { cocky, bluffing } */
 	public static final boolean[][] BBLUFF_EXAMPLES = { { true,  true  },
@@ -82,11 +82,10 @@ public class BayesNet {
 	}
 
 	/**
-	 * Calculates the probability that Bot B will bluff based on whether it is
-	 * cocky or not.
+	 * Calculates the probability that Bot B will bluff based on whether it is cocky or not.
 	 * 
-	 * @param bluffInstances A set of training examples in the form { cocky, bluff } from
-	 * 		which to compute the probabilities.
+	 * @param bluffInstances A set of training examples in the form { cocky, bluff } from which to compute the 
+	 * 		probabilities.
 	 * @return The probability that Bot B will bluff when it is { cocky, !cocky }.
 	 */
 	public double[] calculateBBluffProbabilities(boolean[][] bluffInstances) {
@@ -111,12 +110,12 @@ public class BayesNet {
 	}
 
 	/**
-	 * This method calculates the exact probability of a given event occurring,
-	 * where all variables are assigned a given evidence value.
+	 * This method calculates the exact probability of a given event occurring, where all variables are assigned 
+	 * a given evidence value.
 	 *
 	 * @param evidenceValues The values of all nodes.
-	 * @return -1 if the evidence does not cover every node in the network.
-	 *         Otherwise a probability between 0 and 1.
+	 * @return -1 if the evidence does not cover every node in the network. Otherwise a probability between 0 
+	 * 	and 1.
 	 */
 	public double calculateExactEventProbability(boolean[] evidenceValues) {
 		/* Only performs exact calculation for all evidence known. */
@@ -137,9 +136,8 @@ public class BayesNet {
 	}
 
 	/**
-	 * This method assigns new values to the nodes in the network by sampling
-	 * from the joint distribution (based on PRIOR-SAMPLE method from text
-	 * book/slides).
+	 * This method assigns new values to the nodes in the network by sampling from the joint distribution (based on 
+	 * PRIOR-SAMPLE method from text book/slides).
 	 */
 	public void priorSample() {
 		/* Order of nodes in nodes[] is parents of dependancies first, so priorSample() can simply iterate 
@@ -150,94 +148,101 @@ public class BayesNet {
 	}
 
 	/**
-	 * Rejection sampling. Returns probability of query variable being true
-	 * given the values of the evidence variables, estimated based on the given
-	 * total number of samples (see REJECTION-SAMPLING method from text
-	 * book/slides).
+	 * Checks if the current model of the bayesian network (i.e. the current values of the nodes in nodes[]) is 
+	 * consistent with the specified evidence nodes - i.e. nodes[eNodes[x]].value == eValues[x].
 	 * 
-	 * The nodes/variables are specified by their indices in the nodes array.
-	 * The array evidenceValues has one value for each index in
-	 * indicesOfEvidenceNodes. See also examples in main().
-	 * 
-	 * @param queryNode
-	 *            The variable for which rejection sampling is calculating.
-	 * @param indicesOfEvidenceNodes
-	 *            The indices of the evidence nodes.
-	 * @param evidenceValues
-	 *            The values of the indexed evidence nodes.
-	 * @param N
-	 *            The number of iterations to perform rejection sampling.
-	 * @return The probability that the query variable is true given the
-	 *         evidence.
+	 * @param eNodes The indicies of the evidence nodes in the nodes[]
+	 * @param eValues The value of the evidence nodes, in the order specified by eNodes
+	 * @return True if the current model of the bayesian network is consistent with the evidence, false otherwise.
 	 */
-	public double rejectionSampling(int queryNode,
-			int[] indicesOfEvidenceNodes, boolean[] evidenceValues, int N) {
+	private boolean consistent(int[] eNodes, boolean[] eValues) {
+		for (int i = 0; i < eNodes.length; i++) {
+			if (nodes[eNodes[i]].value != eValues[i]) return false;
+		}
 
-		return 0; // REPLACE THIS LINE BY YOUR CODE
+		return true;
 	}
 
 	/**
-	 * This method assigns new values to the non-evidence nodes in the network
-	 * and computes a weight based on the evidence nodes (based on
-	 * WEIGHTED-SAMPLE method from text book/slides).
+	 * Rejection sampling. Returns probability of query variable being true given the values of the evidence 
+	 * variables, estimated based on the given total number of samples (see REJECTION-SAMPLING method from text 
+	 * book/slides).
+	 * 
+	 * The nodes/variables are specified by their indices in the nodes array. The array evidenceValues has one 
+	 * value for each index in indicesOfEvidenceNodes. See also examples in main().
+	 * 
+	 * @param queryNode The variable for which rejection sampling is calculating.
+	 * @param indicesOfEvidenceNodes The indices of the evidence nodes.
+	 * @param evidenceValues The values of the indexed evidence nodes.
+	 * @param N The number of iterations to perform rejection sampling.
+	 * @return The probability that the query variable is true given the evidence.
+	 */
+	public double rejectionSampling(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, 
+			int N) {
+		assert (indicesOfEvidenceNodes.length == evidenceValues.length);
+		
+		int count = 0, numConsistent = 0;
+
+		/* Take N samples, throw away samples which are inconsistent with the evidence, and count number of 
+		   samples in which queryNode is true */
+		for (int i = 0; i < N; i++) {
+			priorSample();
+			if (consistent(indicesOfEvidenceNodes, evidenceValues)) {
+				numConsistent++;
+				if (nodes[queryNode].value) count++;
+			}
+		}
+
+		/* Return normalised true value */
+		return count / (double)numConsistent;
+	}
+
+	/**
+	 * This method assigns new values to the non-evidence nodes in the network and computes a weight based on the 
+	 * evidence nodes (based on WEIGHTED-SAMPLE method from text book/slides).
 	 * 
 	 * The evidence is specified as in the case of rejectionSampling().
 	 * 
-	 * @param indicesOfEvidenceNodes
-	 *            The indices of the evidence nodes.
-	 * @param evidenceValues
-	 *            The values of the indexed evidence nodes.
+	 * @param indicesOfEvidenceNodes The indices of the evidence nodes.
+	 * @param evidenceValues The values of the indexed evidence nodes.
 	 * @return The weight of the event occurring.
-	 * 
 	 */
-	public double weightedSample(int[] indicesOfEvidenceNodes,
-			boolean[] evidenceValues) {
+	public double weightedSample(int[] indicesOfEvidenceNodes, boolean[] evidenceValues) {
 
 		return 0; // REPLACE THIS LINE BY YOUR CODE
 	}
 
 	/**
-	 * Likelihood weighting. Returns probability of query variable being true
-	 * given the values of the evidence variables, estimated based on the given
-	 * total number of samples (see LIKELIHOOD-WEIGHTING method from text
+	 * Likelihood weighting. Returns probability of query variable being true given the values of the evidence 
+	 * variables, estimated based on the given total number of samples (see LIKELIHOOD-WEIGHTING method from text 
 	 * book/slides).
 	 * 
 	 * The parameters are the same as in the case of rejectionSampling().
 	 * 
-	 * @param queryNode
-	 *            The variable for which rejection sampling is calculating.
-	 * @param indicesOfEvidenceNodes
-	 *            The indices of the evidence nodes.
-	 * @param evidenceValues
-	 *            The values of the indexed evidence nodes.
-	 * @param N
-	 *            The number of iterations to perform rejection sampling.
-	 * @return The probability that the query variable is true given the
-	 *         evidence.
+	 * @param queryNode The variable for which rejection sampling is calculating.
+	 * @param indicesOfEvidenceNodes The indices of the evidence nodes.
+	 * @param evidenceValues The values of the indexed evidence nodes.
+	 * @param N The number of iterations to perform rejection sampling.
+	 * @return The probability that the query variable is true given the 
+	 * 	evidence.
 	 */
-	public double likelihoodWeighting(int queryNode,
-			int[] indicesOfEvidenceNodes, boolean[] evidenceValues, int N) {
-
-		return 0; // REPLACE THIS LINE BY YOUR CODE
+	public double likelihoodWeighting(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, 
+			int N) {
+		return 0;
 	}
 
 	/**
-	 * MCMC inference. Returns probability of query variable being true given
-	 * the values of the evidence variables, estimated based on the given total
-	 * number of samples (see MCMC-ASK method from text book/slides).
+	 * MCMC inference. Returns probability of query variable being true given the values of the evidence variables, 
+	 * estimated based on the given total number of samples (see MCMC-ASK method from text book/slides).
 	 * 
 	 * The parameters are the same as in the case of rejectionSampling().
 	 * 
-	 * @param queryNode
-	 *            The variable for which rejection sampling is calculating.
-	 * @param indicesOfEvidenceNodes
-	 *            The indices of the evidence nodes.
-	 * @param evidenceValues
-	 *            The values of the indexed evidence nodes.
-	 * @param N
-	 *            The number of iterations to perform rejection sampling.
-	 * @return The probability that the query variable is true given the
-	 *         evidence.
+	 * @param queryNode The variable for which rejection sampling is calculating.
+	 * @param indicesOfEvidenceNodes The indices of the evidence nodes.
+	 * @param evidenceValues The values of the indexed evidence nodes.
+	 * @param N The number of iterations to perform rejection sampling.
+	 * @return The probability that the query variable is true given the 
+	 * 	evidence.
 	 */
 	public double MCMCask(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, int N) {
 
@@ -251,17 +256,19 @@ public class BayesNet {
 
 		double[] bluffProbabilities = b.calculateBBluffProbabilities(BBLUFF_EXAMPLES);
 		System.out.println("When Bot B is cocky, it bluffs "
-				+ String.format("%.2f", (bluffProbabilities[0] * 100)) + "% of the time.");
+					+ String.format("%.2f", (bluffProbabilities[0] * 100)) + "% of the time.");
 		System.out.println("When Bot B is not cocky, it bluffs "
-				+ String.format("%.2f", (bluffProbabilities[1] * 100)) + "% of the time.");
+					+ String.format("%.2f", (bluffProbabilities[1] * 100)) + "% of the time.");
 
 		double bluffWinProb = b.calculateExactEventProbability(new boolean[] {
-				true, true, true, false, false, true, false });
+						true, true, true, false, false, true, false });
 		System.out.println("The probability of Bot B winning on a cocky bluff "
 						+ "(with bet) and both bots have bad hands (A dealt) is: "
 						+ String.format("%.6f",bluffWinProb));
 
 		// Sample five states from joint distribution and print them
+		System.out.println();
+		System.out.println("Prior Sampling:");
 		String s;
 		for (int j = 0; j < b.nodes.length; j++) {
 			s = (b.nodes[j].name.length() < 8) ? b.nodes[j].name : b.nodes[j].name.substring(0, 7);
@@ -271,21 +278,27 @@ public class BayesNet {
 		for (int i = 0; i < 5; i++) {
 			b.priorSample();
 			b.printState();
-			System.out.flush();
 		}
 
 		// Print out results of some example queries based on rejection
 		// sampling.
 		// Same should be possible with likelihood weighting and MCMC inference.
+		System.out.println();
+		System.out.println("Rejection Sampling:");
 
 		// Probability of B.GoodHand given bet and A not win.
-		System.out.println(b.rejectionSampling(4, new int[] { 5, 6 }, new boolean[] { true, false }, 10000));
+		s = String.format("%.4f", b.rejectionSampling(4, new int[] { 5, 6 }, 
+					new boolean[] { true, false }, 10000));
+		System.out.println("Probability of B.GoodHand given bet and A not win:\t" + s);
 
 		// Probability of betting given a cocky
-		System.out.println(b.rejectionSampling(1, new int[] { 0 }, new boolean[] { true }, 10000));
+		s = String.format("%.4f", b.rejectionSampling(1, new int[] { 0 }, new boolean[] { true }, 10000));
+		System.out.println("Probability of betting given a cocky:\t\t\t" + s);
 
 		// Probability of B.Goodhand given B.Bluff and A.Deal
-		System.out.println(b.rejectionSampling(4, new int[] { 1, 2 }, new boolean[] { true, true }, 10000));
+		s = String.format("%.4f", b.rejectionSampling(4, new int[] { 1, 2 }, 
+					new boolean[] { true, true }, 10000));
+		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
 	}
 }
 
