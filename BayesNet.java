@@ -17,6 +17,7 @@ public class BayesNet {
 		/* Private members */
 		private String name;		// The name of the node
 		private Node[] parents;		// The parent nodes
+		private Node[] children;	// The child nodes
 		private double[] probs;		// The probabilities for the CPT
 		public boolean value;		// The current value of the node
 
@@ -24,6 +25,7 @@ public class BayesNet {
 		private Node(String n, Node[] pa, double[] pr) {
 			name = n;
 			parents = pa;
+			children = new Node[0];
 			probs = pr;
 		}
 
@@ -48,6 +50,10 @@ public class BayesNet {
 	/* Random number generator for approximate inference methods */
 	private java.util.Random rand;
 
+	/* Indices into a vector of values, N[], for a node, X, where X = { TRUE | FALSE } */
+	private static final int TRUE = 0;
+	private static final int FALSE = 1;
+
 	/* A collection of examples describing whether Bot B is { cocky, bluffing } */
 	public static final boolean[][] BBLUFF_EXAMPLES = { { true,  true  },
 			{ true,  true  }, { true,  true  }, { true,  false },
@@ -59,24 +65,36 @@ public class BayesNet {
 	public BayesNet() {
 		rand = new java.util.Random(System.currentTimeMillis());
 		nodes = new Node[7];
-		nodes[0] = new Node("B.Cocky", new Node[] {}, new double[] { 0.05 });
-		nodes[1] = new Node("B.Bluff", new Node[] { nodes[0] },
-				calculateBBluffProbabilities(BBLUFF_EXAMPLES));
-		nodes[2] = new Node("A.Deals", new Node[] {}, new double[] { 0.5 });
-		nodes[3] = new Node("A.GoodHand", new Node[] { nodes[2] }, new double[] { 0.75, 0.5 });
-		nodes[4] = new Node("B.GoodHand", new Node[] { nodes[2] }, new double[] { 0.4, 0.5 });
-		nodes[5] = new Node("B.Bets", new Node[] { nodes[1], nodes[4] },
-				new double[] { 0.95, 0.7, 0.9, 0.01 });
-		nodes[6] = new Node("A.Wins", new Node[] { nodes[3], nodes[4] },
-				new double[] { 0.45, 0.75, 0.25, 0.55 });
+		nodes[0] = new Node("B.Cocky", 
+					new Node[] {}, 
+					new double[] { 0.05 });
+		nodes[1] = new Node("B.Bluff", 
+					new Node[] { nodes[0] }, 
+					calculateBBluffProbabilities(BBLUFF_EXAMPLES));
+		nodes[2] = new Node("A.Deals", 
+					new Node[] {}, 
+					new double[] { 0.5 });
+		nodes[3] = new Node("A.GoodHand", 
+					new Node[] { nodes[2] }, 
+					new double[] { 0.75, 0.5 });
+		nodes[4] = new Node("B.GoodHand", 
+					new Node[] { nodes[2] }, 
+					new double[] { 0.4, 0.5 });
+		nodes[5] = new Node("B.Bets", 
+					new Node[] { nodes[1], nodes[4] }, 
+					new double[] { 0.95, 0.7, 0.9, 0.01 });
+		nodes[6] = new Node("A.Wins", 
+					new Node[] { nodes[3], nodes[4] }, 
+					new double[] { 0.45, 0.75, 0.25, 0.55 });
+		nodes[0].children = new Node[] { nodes[1] };
+		nodes[1].children = new Node[] { nodes[5] };
+		nodes[2].children = new Node[] { nodes[3], nodes[4] };
+		nodes[3].children = new Node[] { nodes[6] };
+		nodes[4].children = new Node[] { nodes[5], nodes[6] };
 	}
 
 	/** Prints the current state of the network to standard out. */
 	public void printState() {
-		/*for (int i = 0; i < nodes.length; i++) {
-			if (i > 0) System.out.print(", ");
-			System.out.print(nodes[i].name + " = " + nodes[i].value);
-		}*/
 		for (int i = 0; i < nodes.length; i++) System.out.print(nodes[i].value + "\t");
 		System.out.println();
 	}
@@ -180,6 +198,7 @@ public class BayesNet {
 	 */
 	public double rejectionSampling(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, 
 			int N) {
+		assert (queryNode < nodes.length);
 		assert (indicesOfEvidenceNodes.length == evidenceValues.length);
 		
 		int count = 0, numConsistent = 0;
@@ -206,7 +225,7 @@ public class BayesNet {
 	 * @param eValues The value of the evidence nodes, in the order specified by eNodes.
 	 * @return True if this node is an evidence node, false otherwise.
 	 */
-	private boolean inEvidence(int nodeIndex, int[] eNodes, boolean[] eValues) {
+	private boolean isEvidence(int nodeIndex, int[] eNodes, boolean[] eValues) {
 		for (int i = 0; i < eNodes.length; i++) {
 			assert (eNodes[i] < nodes.length);
 
@@ -234,7 +253,7 @@ public class BayesNet {
 
 		/* Sample non-evidence nodes and return a weight based on the evidence nodes */
 		for (int i = 0; i < nodes.length; i++) {
-			if (inEvidence(i, indicesOfEvidenceNodes, evidenceValues)) {
+			if (isEvidence(i, indicesOfEvidenceNodes, evidenceValues)) {
 				/* If nodes[i] is an evidence node compute weight */
 				p = nodes[i].conditionalProbability();
 				w *= (nodes[i].value == true) ? p : (1 - p);
@@ -263,21 +282,63 @@ public class BayesNet {
 	 */
 	public double likelihoodWeighting(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, 
 			int N) {
+		assert (queryNode < nodes.length);
 		assert (indicesOfEvidenceNodes.length == evidenceValues.length);
 
-		final int TRUE = 0, FALSE = 1;
-		double w, weight[] = new double[2];
+		double w, weight[] = {0, 0};
 
 		/* Take N weighted samples, keeping a vector of sums of the weights based on the query node being true 
 		   or false */
 		for (int i = 0; i < N; i++) {
 			w = weightedSample(indicesOfEvidenceNodes, evidenceValues);
-			if (nodes[queryNode].value == true) weight[TRUE] += w;
-			else weight[FALSE] += w;
+			weight[(nodes[queryNode].value == true) ? TRUE : FALSE] += w;
 		}
 
 		/* Return the normalised true value */
 		return weight[TRUE] / (weight[TRUE] + weight[FALSE]);
+	}
+
+	/**
+	 * Calculates probability of a node being true based on its markov blanket, i.e.
+	 * MB(X) = alpha<P(X=true|PARENTS(X))*PRODUCT(CHILDREN(X)|PARENTS(CHILDREN(X))), 
+	 *               P(X=false|PARENTS(X))*PRODUCT(CHILDREN(X)|PARENTS(CHILDREN(X)))>
+	 * 
+	 * @param nodeIndex The index of node in nodes[] to calculate probability for.
+	 * @return The probability of this node being true (between 0 and 1).
+	 */
+	private double MBProb(int nodeIndex) {
+		double p[] = {0, 0}, childProduct, childProb;
+		boolean value;
+
+		/* P(X=true|PARENTS(X)) */
+		p[TRUE] = nodes[nodeIndex].conditionalProbability();
+		/* P(X=false|PARENTS(X)) */
+		p[FALSE] = 1 - p[TRUE];
+
+		value = nodes[nodeIndex].value;
+		
+		/* PRODUCT(CHILDREN(X)|PARENTS(CHILDREN(X))) when X=true */
+		nodes[nodeIndex].value = true;
+		childProduct = 1;
+		for (int i = 0; i < nodes[nodeIndex].children.length; i++) {
+			childProb = nodes[nodeIndex].children[i].conditionalProbability();
+			childProduct *= (nodes[nodeIndex].children[i].value == true) ? childProb : (1 - childProb);
+		}
+		p[TRUE] *= childProduct;
+		
+		/* PRODUCT(CHILDREN(X)|PARENTS(CHILDREN(X))) when X=false */
+		nodes[nodeIndex].value = false;
+		childProduct = 1;
+		for (int i = 0; i < nodes[nodeIndex].children.length; i++) {
+			childProb = nodes[nodeIndex].children[i].conditionalProbability();
+			childProduct *= (nodes[nodeIndex].children[i].value == true) ? childProb : (1 - childProb);
+		}
+		p[FALSE] *= childProduct;
+
+		nodes[nodeIndex].value = value;
+
+		/* Return the normalised true value */
+		return p[TRUE] / (p[TRUE] + p[FALSE]);
 	}
 
 	/**
@@ -294,8 +355,30 @@ public class BayesNet {
 	 * 	evidence.
 	 */
 	public double MCMCask(int queryNode, int[] indicesOfEvidenceNodes, boolean[] evidenceValues, int N) {
+		assert (queryNode < nodes.length);
+		assert (indicesOfEvidenceNodes.length == evidenceValues.length);
 
-		return 0; // REPLACE THIS LINE BY YOUR CODE
+		int count[] = {0, 0};
+		
+		/* Assign evidence nodes and initialise variable nodes with a random value */
+		for (int i = 0; i < nodes.length; i++) {
+			if (!isEvidence(i, indicesOfEvidenceNodes, evidenceValues)) nodes[i].value = rand.nextBoolean();
+		}
+
+		/* Take N samples, keeping a vector of sums of the query node being true or false */
+		for (int i = 0; i < N; i++) {
+			count[(nodes[queryNode].value == true) ? TRUE : FALSE]++;
+
+			/* Sample every non-evidence node based on its markov blanket */
+			for (int j = 0; j < nodes.length; j++) {
+				if (!isEvidence(j, indicesOfEvidenceNodes, evidenceValues)) {
+					nodes[j].value = (rand.nextDouble() < MBProb(j)) ? true : false;
+				}
+			}
+		}
+
+		/* Return the normalised true value */
+		return count[TRUE] / (double)(count[TRUE] + count[FALSE]);
 	}
 
 	/** The main method, with some example method calls. */
@@ -303,6 +386,7 @@ public class BayesNet {
 		/*  Create network.*/
 		BayesNet b = new BayesNet();
 
+		/* Print out results of some non-inference calculations */
 		double[] bluffProbabilities = b.calculateBBluffProbabilities(BBLUFF_EXAMPLES);
 		System.out.println("When Bot B is cocky, it bluffs "
 					+ String.format("%.2f", (bluffProbabilities[0] * 100)) + "% of the time.");
@@ -315,7 +399,7 @@ public class BayesNet {
 						+ "(with bet) and both bots have bad hands (A dealt) is: "
 						+ String.format("%.6f",bluffWinProb));
 
-		// Sample five states from joint distribution and print them
+		/* Sample five states from joint distribution and print them */
 		System.out.println();
 		System.out.println("Prior Sampling:");
 		String s;
@@ -329,8 +413,7 @@ public class BayesNet {
 			b.printState();
 		}
 
-		// Print out results of some example queries based on rejection sampling.
-		// Same should be possible with likelihood weighting and MCMC inference.
+		/* Print out results of some example queries based on rejection sampling. */
 		System.out.println();
 		System.out.println("Rejection Sampling:");
 
@@ -349,7 +432,7 @@ public class BayesNet {
 		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
 
 		
-		// Print out results of some example queries based on rejection sampling.
+		/* Print out results of some example queries based on likelihood weighting. */
 		System.out.println();
 		System.out.println("Likelihood Weighting:");
 
@@ -367,6 +450,23 @@ public class BayesNet {
 					new boolean[] { true, true }, 10000));
 		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
 
+		/* Print out results of some example queries based on markov chain monte carlo. */
+		System.out.println();
+		System.out.println("Markov Chain Monte Carlo:");
+
+		// Probability of B.GoodHand given bet and A not win.
+		s = String.format("%.4f", b.MCMCask(4, new int[] { 5, 6 }, 
+					new boolean[] { true, false }, 100000));
+		System.out.println("Probability of B.GoodHand given bet and A not win:\t" + s);
+
+		// Probability of betting given a cocky
+		s = String.format("%.4f", b.MCMCask(1, new int[] { 0 }, new boolean[] { true }, 10000));
+		System.out.println("Probability of betting given a cocky:\t\t\t" + s);
+
+		// Probability of B.Goodhand given B.Bluff and A.Deal
+		s = String.format("%.4f", b.MCMCask(4, new int[] { 1, 2 }, 
+					new boolean[] { true, true }, 10000));
+		System.out.println("Probability of B.Goodhand given B.Bluff and A.Deal: \t" + s);
 	}
 }
 
