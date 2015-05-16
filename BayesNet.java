@@ -5,7 +5,7 @@
  * 		Based on BayesNet.java from:
  * 			http://elearn.waikato.ac.nz/pluginfile.php/701717/mod_resource/content/8/BayesNet.java
  * 
- * Author:	Campbell Lockley	studentID: 1178618	Based on BayesNet.java from
+ * Author:	Campbell Lockley	studentID: 1178618
  * Date:	15/05/15
  * ****************************************************************************************************************** */
 
